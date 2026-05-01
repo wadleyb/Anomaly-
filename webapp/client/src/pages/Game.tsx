@@ -9,8 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { DailyTodayResponse, SubmitResponse } from "@/lib/api-types";
 
-const PER_PUZZLE_MS = 12000; // 12s timeout per puzzle
-
 export default function Game() {
   const [, setLocation] = useLocation();
 
@@ -41,19 +39,21 @@ function GameInner({ day }: { day: number }) {
   const [idx, setIdx] = useState(0);
   const [results, setResults] = useState<Array<"🟩" | "🟥">>([]);
   const [feedback, setFeedback] = useState<{ correct: boolean; tappedIdx: number } | null>(null);
-  const [timeLeft, setTimeLeft] = useState(PER_PUZZLE_MS);
+  const currentTime = puzzles[idx]?.timeMs ?? 5000;
+  const [timeLeft, setTimeLeft] = useState(currentTime);
   const startedAtRef = useRef<number>(performance.now());
   const puzzleStartRef = useRef<number>(performance.now());
 
-  // Timer tick
+  // Timer tick — uses each puzzle's own timeMs budget.
   useEffect(() => {
     if (feedback) return;
+    const budget = puzzles[idx]?.timeMs ?? 5000;
     puzzleStartRef.current = performance.now();
-    setTimeLeft(PER_PUZZLE_MS);
+    setTimeLeft(budget);
     let raf: number;
     const tick = () => {
       const elapsed = performance.now() - puzzleStartRef.current;
-      const left = Math.max(0, PER_PUZZLE_MS - elapsed);
+      const left = Math.max(0, budget - elapsed);
       setTimeLeft(left);
       if (left <= 0) {
         timeOut();
@@ -106,7 +106,8 @@ function GameInner({ day }: { day: number }) {
   }
 
   const puzzle = puzzles[idx];
-  const pct = Math.max(0, Math.min(100, (timeLeft / PER_PUZZLE_MS) * 100));
+  const budget = puzzle.timeMs;
+  const pct = Math.max(0, Math.min(100, (timeLeft / budget) * 100));
   const barTone =
     pct < 25 ? "bg-destructive" : pct < 50 ? "bg-accent" : "bg-foreground";
 
