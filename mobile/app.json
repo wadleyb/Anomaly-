@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "ios": {
+      "supportsTablet": true
+    },
+    "web": {
+      "output": "static",
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "icon": "./assets/images/icon.png",
+    "name": "93dfbf9b-ad0b-4812-9f3a-7c0e6b75b274",
+    "slug": "93dfbf9b-ad0b-4812-9f3a-7c0e6b75b274",
+    "extra": {
+      "eas": {
+        "projectId": "738b4ce4-4d4e-4b50-82b8-ccc8c928a390"
+      },
+      "router": {}
+    },
+    "owner": "create-inc",
+    "scheme": "anomaly.93dfbf9b-ad0b-4812-9f3a-7c0e6b75b274",
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/adaptive-icon.png"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/738b4ce4-4d4e-4b50-82b8-ccc8c928a390"
+    },
+    "version": "1.0.0",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "orientation": "portrait",
+    "newArchEnabled": true,
+    "userInterfaceStyle": "automatic"
+  }
+}
