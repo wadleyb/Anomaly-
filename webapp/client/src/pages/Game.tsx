@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { DailyTodayResponse, SubmitResponse } from "@/lib/api-types";
 
+// Single steady budget for the whole daily — feels consistent.
+const TOTAL_BUDGET_MS = 35_000; // 7s per puzzle on average
+
 export default function Game() {
   const [, setLocation] = useLocation();
 
@@ -16,7 +19,6 @@ export default function Game() {
     queryKey: ["/api/daily/today"],
   });
 
-  // If they already played, redirect to result.
   useEffect(() => {
     if (data?.played) setLocation("/result");
   }, [data?.played, setLocation]);
@@ -39,24 +41,20 @@ function GameInner({ day }: { day: number }) {
   const [idx, setIdx] = useState(0);
   const [results, setResults] = useState<Array<"🟩" | "🟥">>([]);
   const [feedback, setFeedback] = useState<{ correct: boolean; tappedIdx: number } | null>(null);
-  const currentTime = puzzles[idx]?.timeMs ?? 5000;
-  const [timeLeft, setTimeLeft] = useState(currentTime);
+  const [timeLeft, setTimeLeft] = useState(TOTAL_BUDGET_MS);
   const startedAtRef = useRef<number>(performance.now());
-  const puzzleStartRef = useRef<number>(performance.now());
 
-  // Timer tick — uses each puzzle's own timeMs budget.
+  // ONE continuous global timer. Doesn't reset between puzzles. No more
+  // weird "speeding up / slowing down" feeling — same drain rate always.
   useEffect(() => {
-    if (feedback) return;
-    const budget = puzzles[idx]?.timeMs ?? 5000;
-    puzzleStartRef.current = performance.now();
-    setTimeLeft(budget);
     let raf: number;
     const tick = () => {
-      const elapsed = performance.now() - puzzleStartRef.current;
-      const left = Math.max(0, budget - elapsed);
+      const elapsed = performance.now() - startedAtRef.current;
+      const left = Math.max(0, TOTAL_BUDGET_MS - elapsed);
       setTimeLeft(left);
       if (left <= 0) {
-        timeOut();
+        // Time ran out — fill remaining puzzles as misses and finish.
+        endByTimeout();
         return;
       }
       raf = requestAnimationFrame(tick);
@@ -64,7 +62,7 @@ function GameInner({ day }: { day: number }) {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx]);
+  }, []);
 
   const submit = useMutation<SubmitResponse, Error, { results: Array<"🟩" | "🟥">; totalMs: number }>({
     mutationFn: async (body) => {
@@ -78,10 +76,14 @@ function GameInner({ day }: { day: number }) {
     },
   });
 
+  function finish(final: Array<"🟩" | "🟥">) {
+    const totalMs = Math.round(performance.now() - startedAtRef.current);
+    submit.mutate({ results: final, totalMs });
+  }
+
   function advance(next: Array<"🟩" | "🟥">) {
     if (next.length >= 5) {
-      const totalMs = Math.round(performance.now() - startedAtRef.current);
-      submit.mutate({ results: next, totalMs });
+      finish(next);
       return;
     }
     setIdx((i) => i + 1);
@@ -94,22 +96,24 @@ function GameInner({ day }: { day: number }) {
     setFeedback({ correct, tappedIdx: i });
     const next = [...results, correct ? ("🟩" as const) : ("🟥" as const)];
     setResults(next);
-    setTimeout(() => advance(next), correct ? 450 : 700);
+    setTimeout(() => advance(next), correct ? 350 : 600);
   }
 
-  function timeOut() {
-    if (feedback) return;
-    setFeedback({ correct: false, tappedIdx: -1 });
-    const next: Array<"🟩" | "🟥"> = [...results, "🟥"];
-    setResults(next);
-    setTimeout(() => advance(next), 800);
+  function endByTimeout() {
+    // Fill any remaining puzzles as 🟥 and submit.
+    const remaining = 5 - results.length;
+    if (remaining <= 0) return;
+    const final: Array<"🟩" | "🟥"> = [
+      ...results,
+      ...Array.from({ length: remaining }, () => "🟥" as const),
+    ];
+    finish(final);
   }
 
   const puzzle = puzzles[idx];
-  const budget = puzzle.timeMs;
-  const pct = Math.max(0, Math.min(100, (timeLeft / budget) * 100));
+  const pct = Math.max(0, Math.min(100, (timeLeft / TOTAL_BUDGET_MS) * 100));
   const barTone =
-    pct < 25 ? "bg-destructive" : pct < 50 ? "bg-accent" : "bg-foreground";
+    pct < 20 ? "bg-destructive" : pct < 40 ? "bg-accent" : "bg-foreground";
 
   return (
     <div className="min-h-dvh bg-background text-foreground flex flex-col">
@@ -124,7 +128,7 @@ function GameInner({ day }: { day: number }) {
         </div>
       </div>
 
-      {/* Result strip — what's been answered so far */}
+      {/* Progress pips */}
       <div className="mt-6 flex justify-center gap-2">
         {Array.from({ length: 5 }).map((_, i) => (
           <span
@@ -138,19 +142,22 @@ function GameInner({ day }: { day: number }) {
         ))}
       </div>
 
-      {/* Timer */}
+      {/* Single steady global timer */}
       <div className="mx-auto mt-6 h-1.5 w-full max-w-md rounded-full bg-muted overflow-hidden">
         <div
-          className={`h-full ${barTone} transition-[width] duration-100`}
-          style={{ width: `${pct}%` }}
+          className={`h-full ${barTone}`}
+          style={{ width: `${pct}%`, transition: "width 80ms linear, background-color 200ms" }}
           data-testid="bar-timer"
         />
       </div>
+      <div className="mx-auto mt-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        {Math.ceil(timeLeft / 1000)}s left
+      </div>
 
-      {/* Grid */}
+      {/* Grid — shapes float, no tile borders */}
       <div className="flex-1 flex items-center justify-center px-6 py-8">
         <div
-          className="grid w-full max-w-md gap-3"
+          className="grid w-full max-w-md gap-1"
           style={{
             gridTemplateColumns: `repeat(${puzzle.gridSize}, minmax(0, 1fr))`,
           }}
@@ -159,8 +166,7 @@ function GameInner({ day }: { day: number }) {
           {puzzle.grid.map((cell, i) => {
             const isTapped = feedback?.tappedIdx === i;
             const isAnomaly = i === puzzle.anomalyIndex;
-            const showCorrect =
-              feedback && (isTapped && feedback.correct);
+            const showCorrect = feedback && isTapped && feedback.correct;
             const showWrong = feedback && isTapped && !feedback.correct;
             const showReveal = feedback && !feedback.correct && isAnomaly;
 
@@ -169,15 +175,17 @@ function GameInner({ day }: { day: number }) {
                 key={i}
                 onClick={() => handleTap(i)}
                 disabled={!!feedback}
-                className={`aspect-square rounded-xl border bg-card p-2 transition-all active:scale-95 ${
-                  showCorrect
-                    ? "border-foreground bg-accent"
+                aria-label={`Cell ${i}`}
+                className="aspect-square p-2 transition-transform active:scale-90 focus:outline-none rounded-md"
+                style={{
+                  background: showCorrect
+                    ? "hsl(var(--accent) / 0.25)"
                     : showWrong
-                    ? "border-destructive bg-destructive/10"
+                    ? "hsl(var(--destructive) / 0.18)"
                     : showReveal
-                    ? "border-accent bg-accent/30"
-                    : "border-card-border hover:border-foreground/40"
-                }`}
+                    ? "hsl(var(--accent) / 0.18)"
+                    : "transparent",
+                }}
                 data-testid={`button-cell-${i}`}
               >
                 <Shape shape={cell} />
