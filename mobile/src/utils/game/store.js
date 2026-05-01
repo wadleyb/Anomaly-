@@ -23,6 +23,9 @@ export const useGameStore = create((set, get) => ({
   isGameOver: false,
   isPlaying: false,
   currentLevel: null,
+  // Combo system — chain correct taps to build a multiplier
+  combo: 0,
+  topCombo: 0,
   // Animation feedback state
   isShowingFeedback: false,
   wrongTapIndex: null,
@@ -139,7 +142,12 @@ export const useGameStore = create((set, get) => ({
         } catch (e) {}
       }
 
-      const newScore = score + 1;
+      // Combo: increment for each correct, reset on wrong/timeout
+      const prevCombo = get().combo || 0;
+      const newCombo = prevCombo + 1;
+      const comboMult = newCombo >= 5 ? 3 : newCombo >= 3 ? 2 : 1;
+      set({ combo: newCombo, topCombo: Math.max(get().topCombo || 0, newCombo) });
+      const newScore = score + comboMult;
       let newDifficulty = difficulty;
 
       // Increase difficulty every 5 correct answers
@@ -189,6 +197,8 @@ export const useGameStore = create((set, get) => ({
 
       // Show feedback for 1.5 seconds, then proceed with game logic
       const timeoutId = setTimeout(() => {
+        // wrong tap: reset combo
+        set({ combo: 0 });
         const { mode, lives, score, bestScore } = get();
 
         // TREAT WORDS like FREEPLAY for end condition unless in SURVIVAL

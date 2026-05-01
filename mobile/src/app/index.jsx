@@ -5,7 +5,10 @@ import { HomeScreen } from "@/screens/HomeScreen";
 import { ModeSelectScreen } from "@/screens/ModeSelectScreen";
 import { GameScreen } from "@/screens/GameScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
+import { JourneyScreen } from "@/screens/JourneyScreen";
+import { DailyScreen } from "@/screens/DailyScreen";
 import { useSoundStore } from "@/utils/game/soundStore";
+import { useJourneyStore } from "@/utils/game/journeyStore";
 import { initMusic, playMusic, pauseMusic } from "@/utils/audio/musicManager";
 
 export default function Index() {
@@ -13,9 +16,14 @@ export default function Index() {
 }
 
 function AnomalyGame() {
-  const [currentScreen, setCurrentScreen] = useState("home"); // 'home', 'modes', 'game', 'settings'
+  const [currentScreen, setCurrentScreen] = useState("home"); // 'home' | 'journey' | 'daily' | 'modes' | 'game' | 'settings'
   const musicOn = useSoundStore((s) => s.musicOn);
   const hasInitializedRef = useRef(false);
+  const hydrate = useJourneyStore((s) => s.hydrate);
+  const hydrated = useJourneyStore((s) => s.hydrated);
+
+  // Hydrate persistent journey/daily state on mount
+  useEffect(() => { if (!hydrated) hydrate(); }, [hydrated]);
 
   // Initialize music once, and start when entering Home if enabled
   useEffect(() => {
@@ -50,6 +58,12 @@ function AnomalyGame() {
     <View style={{ flex: 1, backgroundColor: "#F5F3EE" }}>
       <StatusBar style="dark" />
       {currentScreen === "home" && <HomeScreen onNavigate={setCurrentScreen} />}
+      {currentScreen === "journey" && (
+        <JourneyScreen onNavigate={setCurrentScreen} />
+      )}
+      {currentScreen === "daily" && (
+        <DailyScreen onNavigate={setCurrentScreen} />
+      )}
       {currentScreen === "modes" && (
         <ModeSelectScreen onNavigate={setCurrentScreen} />
       )}
